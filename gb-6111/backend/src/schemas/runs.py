@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from src.constants.job_state import JobState
+from src.constants.job_state import EvidenceState, JobState
 
 
 class RunInput(BaseModel):
@@ -18,3 +18,6 @@ class RunEntry(BaseModel):
     result: dict | None
     failure: str | None
     digest: str | None
+    evidence_status: EvidenceState
+    invalidated_at: int | None
+    invalidation_reason: str | None

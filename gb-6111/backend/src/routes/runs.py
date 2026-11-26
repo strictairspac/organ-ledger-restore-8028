@@ -43,6 +43,8 @@ def export(run_id: int):
         if run["status"] != JobState.DONE:
             raise HTTPException(409, "没有可导出的执行结果")
         run["review"] = reviews.get(db, run_id)
+    # 交单快照是内部执行依据，不进入交接证据；失效批次也保留原始证据，仅标注效力状态。
+    run.pop("snapshot_payload", None)
     return Response(canonical_json(run), media_type="application/json", headers={
         "Content-Disposition": f"attachment; filename=evidence-{run_id}.json",
     })

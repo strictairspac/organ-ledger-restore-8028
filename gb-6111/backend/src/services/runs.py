@@ -5,13 +5,15 @@ from sqlalchemy import insert, select
 
 from src.constants.job_state import JobState
 from src.domain.scenario import CONFIG
-from src.models.cases import cases
+from src.models.cases import cases as cases_table
 from src.models.runs import runs
 from . import audit, cases as case_service
 
 
 def query():
-    return select(runs, cases.c.title.label("case_title")).join(cases, cases.c.id == runs.c.case_id)
+    return select(runs, cases_table.c.title.label("case_title")).join(
+        cases_table, cases_table.c.id == runs.c.case_id
+    )
 
 
 def get(db, run_id):
@@ -28,9 +30,14 @@ def list_entries(db):
 def enqueue(db, case_id, parameter, actor):
     if parameter > CONFIG["max_parameter"]:
         raise HTTPException(422, f"参数不能超过 {CONFIG['max_parameter']}")
-    case_service.get(db, case_id)
+    case = case_service.get(db, case_id)
     change = db.execute(insert(runs).values(
-        case_id=case_id, status=JobState.QUEUED, parameter=parameter, actor=actor, created_at=int(time())
+        case_id=case_id,
+        status=JobState.QUEUED,
+        parameter=parameter,
+        actor=actor,
+        created_at=int(time()),
+        snapshot_payload=case["payload"],
     ))
     run_id = change.inserted_primary_key[0]
     audit.record(db, "enqueue", actor, "run", run_id)

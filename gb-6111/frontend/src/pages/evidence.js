@@ -1,6 +1,7 @@
 import { api } from "../api/workbench.js";
 import { errorText, field } from "../components/common/fields.js";
 import { empty, pageHeading, section } from "../components/common/panel.js";
+import { evidenceStatus, status } from "../components/common/status.js";
 import { resultTable } from "../components/common/table.js";
 import { submit } from "../hooks/submit.js";
 import { el } from "../utils/dom.js";
@@ -17,6 +18,14 @@ function reviewForm(id, saved) {
 function signature(review) {
   return el("div", {"data-testid": "reviewed", class: "signature"},
     el("strong", {}, `已签署 · ${review.actor}`), el("p", {}, review.note), el("time", {}, time(review.created_at)));
+}
+
+function invalidation(run) {
+  return el("div", {"data-testid": "invalidated", class: "invalidation"},
+    evidenceStatus(run.evidence_status),
+    el("p", {}, run.invalidation_reason || "勘误改变了所选维修单或随卷资料，该证明已失效。"),
+    el("time", {}, `失效时间：${time(run.invalidated_at)}`),
+    el("p", {}, "已签核的旧证明仍可原样下载；重新提交批次后才能签核新证明。"));
 }
 
 export async function evidencePage(config, user, route) {
@@ -39,17 +48,30 @@ export async function evidencePage(config, user, route) {
       button.disabled = false;
     }
   }}, "导出证据");
+  const invalid = run.evidence_status === "invalidated";
   const signing = el("div", {});
-  signing.append(review ? signature(review) : user.role === "reviewer" ?
-    reviewForm(run.id, data => signing.replaceChildren(signature(data))) : empty("待复核员签署。"));
+  if (review) {
+    signing.append(signature(review));
+  } else if (invalid) {
+    signing.append(empty("证明已失效，不能再签核；请重新执行批次。"));
+  } else if (user.role === "reviewer") {
+    signing.append(reviewForm(run.id, data => signing.replaceChildren(signature(data))));
+  } else {
+    signing.append(empty("待复核员签署。"));
+  }
   const options = el("select", {"aria-label": "选择已完成的批次", onchange: event => {
     location.hash = `evidence/${event.target.value}`;
-  }}, runs.map(item => el("option", {value: item.id, selected: item.id === run.id}, `#${item.id} ${item.case_title}`)));
+  }}, runs.map(item => el("option", {value: item.id, selected: item.id === run.id},
+    `#${item.id} ${item.case_title}${item.evidence_status === "invalidated" ? "（已失效）" : ""}`)));
   return el("div", {class: "page evidence"},
     pageHeading(config.modules[3], run.case_title, button),
     issue, options,
-    el("section", {class: "feature evidence-summary"}, el("div", {}, el("h2", {}, "批次判定"), el("p", {}, run.result.summary)),
+    el("section", {class: "feature evidence-summary"},
+      el("div", {}, el("h2", {}, "批次判定"),
+        el("p", {}, run.result.summary),
+        el("p", {class: "state-line"}, status(run.status), evidenceStatus(run.evidence_status))),
       el("details", {}, el("summary", {}, "证据摘要"), el("code", {}, run.digest))),
+    invalid ? invalidation(run) : null,
     el("dl", {class: "metrics"}, Object.entries(run.result.metrics).map(([label, value]) =>
       el("div", {}, el("dt", {}, label), el("dd", {}, cell(value))))),
     section("业务结果明细", run.result.rows.length ? resultTable(run.result.rows) : empty("此批次无明细。")),

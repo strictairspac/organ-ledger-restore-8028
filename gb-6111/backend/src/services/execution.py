@@ -23,7 +23,10 @@ def service_one():
         task = db.execute(statement).mappings().first()
         if task is None:
             return False
-        payload = db.scalar(select(cases.c.payload).where(cases.c.id == task["case_id"]))
+        # 排队批次始终按交单时冻结的资料快照完成，勘误不影响在途批次。
+        payload = task["snapshot_payload"]
+        if payload is None:
+            payload = db.scalar(select(cases.c.payload).where(cases.c.id == task["case_id"]))
         try:
             result = scenario.run(payload, task["parameter"], db)
             output = {"status": JobState.DONE, "result": result, "digest": content_digest(result)}

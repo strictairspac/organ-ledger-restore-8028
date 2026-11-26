@@ -1,6 +1,6 @@
 # 风栎琴作·管风琴维护卷复原
 
-从整月维护卷择单归档，把关联琴体、维修工单和测记复原到隔离表，再用证据确认缺卷或传输损伤。
+从整月维护卷择单归档，把关联琴体、维修工单和测记复原到隔离表，再用证据确认缺卷或传输损伤。巡修组可对维护卷做勘误，勘误与复原并发时证明效力按既定规则自动判定。
 
 ## 业务流程
 
@@ -16,6 +16,14 @@ PostgreSQL 原生 COPY、外键依赖闭包和逐段 SHA-256 字节核验。
 09:00 打开 organ-ledger-2026-11.copy 对应的十一月维修卷。09:05 选 W-1131、W-1138。09:07 设置最多 20 张。09:10 提交演练。09:12 核对 2 个琴体、2 张工单、3 条测记。09:15 复核三个 COPY 摘要后导出证明。09:20 用损伤卷重跑，确认只输出阻断证据。
 
 先按请求顺序取上限内的工单，把父琴体与其所有子测记一并选中。PostgreSQL COPY 以主键 C 排序流出 UTF-8 CSV，每段计算 SHA-256。全部段校验通过后才按外键顺序还原。校验报告重新导出目标表并对照原始段摘要。
+
+## 勘误与证明效力
+
+- 资料操作员可对维护卷提交勘误：更正测记内容、记错归属的维修单（`organ_id`）及其他随卷资料，每次勘误记录版本、原因、结构化差异和受影响批次。
+- 交单时把当时的资料快照冻结在批次上。勘误与复原并发时，排队批次仍按交单时的资料完成，勘误不影响在途批次。
+- 勘误一旦改变批次所选维修单或随卷闭包内的琴体、工单、测记，该批次已产出的证明即刻失效；改回原值也不恢复效力。闭包之外的改动不影响证明。
+- 未受勘误影响的证明照常签核；已失效的证明禁止再签核，需重新执行批次，新批次才可签核。
+- 已签核的旧证明保留原评审记录并可原样下载，证据文件同时标注当前效力状态。
 
 范围为应用演练中的逻辑数据卷。以数据库隔离临时表核验，数据库事务结束后自动清除，不提供整库 DDL、角色、物理 WAL 或生产恢复编排。
 
@@ -37,9 +45,9 @@ docker compose up -d --build --wait
 
 | 登录名 | 角色 | 可执行操作 |
 |---|---|---|
-| operator | 资料操作员 | 登记业务资料、设置「本次最多复原工单数」、提交、查看和下载结果 |
+| operator | 资料操作员 | 登记业务资料、提交勘误、设置「本次最多复原工单数」、提交、查看和下载结果 |
 | reviewer | 业务复核员 | 查看执行证据、签署单次复核、下载交接单 |
-| viewer | 只读观察员 | 查看资料、执行结果及审计，下载证据 |
+| viewer | 只读观察员 | 查看资料、勘误记录、执行结果及审计，下载证据 |
 
 选用「organ-ledger-2026-11.copy」对应的演示资料，保存一份复演资料，再以默认参数 20 提交。worker 保存结果摘要、业务明细和 SHA-256。复核员登录后在「复原证明」签署。
 
@@ -52,9 +60,9 @@ docker compose up -d --build --wait
 | 数据库 | PostgreSQL 16 |
 | 后台执行 | Redis 通知、数据库持久任务队列和行锁、Python worker |
 
-从 `backend/src/domain/scenario.py` 修改业务入口和演示口径，运行 `docker compose up -d --build --wait` 查看变更。数据库表结构在 `backend/src/models` 和 `backend/migrations`，输入模型在 `backend/src/schemas`。业务页和请求接口在 `frontend/src/pages`、`frontend/src/api`。资料、执行、复核三个工作流实体各有独立表和 API；场景输入及结果保留在所属资料和批次中。
+从 `backend/src/domain/scenario.py` 修改业务入口和演示口径，运行 `docker compose up -d --build --wait` 查看变更。数据库表结构在 `backend/src/models` 和 `backend/migrations`（v002 增加勘误台账与证明效力字段），输入模型在 `backend/src/schemas`。业务页和请求接口在 `frontend/src/pages`、`frontend/src/api`。资料、勘误、执行、复核四个工作流实体各有独立表和 API；场景输入及交单快照保留在所属资料和批次中。
 
-角色枚举在 `backend/src/constants/roles.py`、`frontend/src/constants/roles.js`，用于服务端访问控制、账号初始化、前端导航与签署。批次状态在 `backend/src/constants/job_state.py`、`frontend/src/constants/states.js`，用于队列、状态 API、状态标记与轮询。登记、提交、完成和签署事件写入审计表。
+角色枚举在 `backend/src/constants/roles.py`、`frontend/src/constants/roles.js`，用于服务端访问控制、账号初始化、前端导航与签署。批次状态在 `backend/src/constants/job_state.py`、`frontend/src/constants/states.js`，用于队列、状态 API、状态标记与轮询；证明效力（有效/失效）随批次返回并在证据页、批次页展示。登记、勘误、证明失效、提交、完成和签署事件写入审计表。
 
 `COMPOSE_PROJECT_NAME` 设置栈名，`FRONTEND_PORT`、`BACKEND_PORT`、`DB_PORT` 设置端口。通过 `DB_PASSWORD`、`JWT_SECRET`、`DEMO_PASSWORD` 配置本地凭据。设置 `SEED_DEMO=false` 可关闭演示数据载入，此时数据库初始没有演示账号。数据库密码调整后，已有数据卷需在数据库内同步修改用户密码。
 
