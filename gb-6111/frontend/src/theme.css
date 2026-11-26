@@ -1,0 +1,24 @@
+:root {
+  --paper: oklch(0.94 .018 52);
+  --surface: oklch(.982 .008 52);
+  --tint: oklch(.916 0.024 52);
+  --accent: oklch(0.427 0.056 52);
+  --on-accent: oklch(.985 .008 52);
+  --ink: oklch(.235 .037 52);
+  --muted: oklch(.42 .04 52);
+  --rule: oklch(.824 0.021 52);
+  --rail: oklch(0.22 0.032 52);
+  --rail-ink: oklch(.953 .015 52);
+  --rail-highlight: oklch(.34 0.035 52);
+  --signal: oklch(.46 .145 25);
+  --title-font: "Baskervville", "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --body-font: "Noto Serif SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --rail-width: clamp(13rem, 17vw, 19rem);
+  --login-ratio: 5fr;
+  --feature-ratio: 5fr;
+  --split-ratio: 5fr;
+  --radius: 1px;
+  --rail-size: 8px;
+  --cell-min: 7rem;
+}
+.login-story { border-block: 1px solid var(--rule); padding: 1.8rem 0; }
